@@ -23,14 +23,14 @@
 
 #include <default_gui_model.h>
 
-class PluginTemplate : public DefaultGUIModel
+class Quantizer : public DefaultGUIModel
 {
 
   Q_OBJECT
 
 public:
-  PluginTemplate(void);
-  virtual ~PluginTemplate(void);
+  Quantizer(void);
+  virtual ~Quantizer(void);
 
   void execute(void);
   void createGUI(DefaultGUIModel::variable_t*, int);
@@ -43,6 +43,24 @@ private:
   double some_parameter;
   double some_state;
   double period;
+  
+
+  int buffLen;
+  std::vector<double> inputBuffer;
+  
+  //params
+  double gain;
+  double bias;
+  int numLevels;
+  double range;
+  
+  //states
+  double x_in;
+  double x_map;
+  int y_quant;
+  
+  
+  
 
   void initParameters();
 

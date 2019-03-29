@@ -1,9 +1,9 @@
-PLUGIN_NAME = plugin_template
+PLUGIN_NAME = quantizer
 
-HEADERS = plugin-template.h
+HEADERS = quantizer.h
 
-SOURCES = plugin-template.cpp\
-          moc_plugin-template.cpp\
+SOURCES = quantizer.cpp\
+          moc_quantizer.cpp\
 
 LIBS = 
 

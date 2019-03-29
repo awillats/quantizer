@@ -21,32 +21,52 @@
  * DefaultGUIModel with a custom GUI.
  */
 
-#include "plugin-template.h"
+#include "quantizer.h"
 #include <iostream>
 #include <main_window.h>
+#include <cmath>
 
 extern "C" Plugin::Object*
 createRTXIPlugin(void)
 {
-  return new PluginTemplate();
+  return new Quantizer();
 }
 
 static DefaultGUIModel::variable_t vars[] = {
   {
-    "GUI label", "Tooltip description",
+    "Range", "g in y = g*(x + b)",
     DefaultGUIModel::PARAMETER | DefaultGUIModel::DOUBLE,
   },
   {
-    "A State", "Tooltip description", DefaultGUIModel::STATE,
+    "Bias", "b in y = g*(x + b)",
+    DefaultGUIModel::PARAMETER | DefaultGUIModel::DOUBLE,
+  },
+  {
+    "NLevels", "b in y = clip( round(g*(x + b)) ,0, nlevels)",
+    DefaultGUIModel::PARAMETER | DefaultGUIModel::DOUBLE,
+  },
+
+  {
+    "x-in", "x in y = g*(x + b)",
+    DefaultGUIModel::INPUT,
+  },
+
+  {
+    "y-out", "y in y = clip( round(g*x + b) ,0, nlevels)",
+    DefaultGUIModel::OUTPUT ,
+  },
+    {
+    "x-map", "x_map = g*(x+b)",
+    DefaultGUIModel::OUTPUT ,
   },
 };
 
 static size_t num_vars = sizeof(vars) / sizeof(DefaultGUIModel::variable_t);
 
-PluginTemplate::PluginTemplate(void)
-  : DefaultGUIModel("PluginTemplate with Custom GUI", ::vars, ::num_vars)
+Quantizer::Quantizer(void)
+  : DefaultGUIModel("Quantizer with Custom GUI", ::vars, ::num_vars)
 {
-  setWhatsThis("<p><b>PluginTemplate:</b><br>QWhatsThis description.</p>");
+  setWhatsThis("<p><b>Quantizer:</b><br>QWhatsThis description.</p>");
   DefaultGUIModel::createGUI(vars,
                              num_vars); // this is required to create the GUI
   customizeGUI();
@@ -58,35 +78,75 @@ PluginTemplate::PluginTemplate(void)
   QTimer::singleShot(0, this, SLOT(resizeMe()));
 }
 
-PluginTemplate::~PluginTemplate(void)
+Quantizer::~Quantizer(void)
 {
 }
 
 void
-PluginTemplate::execute(void)
+Quantizer::execute(void)
 {
+   x_in= input(0);
+
+
+   std::rotate(inputBuffer.begin(), inputBuffer.begin() + 1, inputBuffer.end());
+    inputBuffer[0] = x_in;
+   // inputBuffer[0] = x_in;
+   //inputBuffer.assign(1,x_in);
+
+  gain = static_cast<double>(numLevels)/range;
+  x_map =gain*(x_in+bias);
+  y_quant = floor(x_map);
+  
+  if (y_quant<0)
+  {
+    y_quant=0;
+  }
+  if (y_quant>(numLevels-1))
+  {
+    y_quant = numLevels-1;
+  }
+  
+  output(0) = y_quant;
+  output(1) = x_map;
   return;
 }
 
 void
-PluginTemplate::initParameters(void)
+Quantizer::initParameters(void)
 {
-  some_parameter = 0;
-  some_state = 0;
+    gain = 1;
+    range = 2;
+    bias = 0;
+    numLevels = 2;
+    buffLen=1e3;
+    
+  for (int i=1;i<buffLen;i++)
+  {
+   inputBuffer.push_back(i);
+   }
 }
 
 void
-PluginTemplate::update(DefaultGUIModel::update_flags_t flag)
+Quantizer::update(DefaultGUIModel::update_flags_t flag)
 {
   switch (flag) {
     case INIT:
       period = RT::System::getInstance()->getPeriod() * 1e-6; // ms
-      setParameter("GUI label", some_parameter);
-      setState("A State", some_state);
+      
+      
+        setParameter("Range", range);
+        //setParameter("Gain", gain);
+        setParameter("Bias", bias);
+        setParameter("NLevels", numLevels);
+      
       break;
 
     case MODIFY:
       some_parameter = getParameter("GUI label").toDouble();
+     // gain = getParameter("Gain").toDouble();
+      range = getParameter("Range").toDouble();
+	  bias = getParameter("Bias").toDouble();
+	  numLevels = getParameter("NLevels").toDouble();
       break;
 
     case UNPAUSE:
@@ -105,13 +165,13 @@ PluginTemplate::update(DefaultGUIModel::update_flags_t flag)
 }
 
 void
-PluginTemplate::customizeGUI(void)
+Quantizer::customizeGUI(void)
 {
   QGridLayout* customlayout = DefaultGUIModel::getLayout();
 
   QGroupBox* button_group = new QGroupBox;
 
-  QPushButton* abutton = new QPushButton("Button A");
+  QPushButton* abutton = new QPushButton("Auto-calibrate");
   QPushButton* bbutton = new QPushButton("Button B");
   QHBoxLayout* button_layout = new QHBoxLayout;
   button_group->setLayout(button_layout);
@@ -126,11 +186,28 @@ PluginTemplate::customizeGUI(void)
 
 // functions designated as Qt slots are implemented as regular C++ functions
 void
-PluginTemplate::aBttn_event(void)
+Quantizer::aBttn_event(void)
 {
+   /*
+   for (int i=0; i<buffLen; i++)
+   {
+   std::cout<<inputBuffer[i]<<',';
+   }
+   std::cout<<"\n[";
+   */
+   bias = *std::min_element(inputBuffer.begin(), inputBuffer.end());
+   bias = -bias;
+   double max = *std::max_element(inputBuffer.begin(), inputBuffer.end());
+   range = max+bias;
+   
+   std::cout<<"max"<<max<<"min"<<-bias;
+   setParameter("Range", range);
+        //setParameter("Gain", gain);
+    setParameter("Bias", bias);
+   
 }
 
 void
-PluginTemplate::bBttn_event(void)
+Quantizer::bBttn_event(void)
 {
 }
